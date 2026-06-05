@@ -4,20 +4,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 
-# ---------------- [수정] 스트림릿 서버용 한글 폰트 강제 설정 ----------------
-@st.cache_resource
-def install_fonts():
-    # 리눅스 서버 환경일 때만 나눔 폰트를 다운로드하여 설치합니다.
-    if os.name != 'nt':  # Windows가 아닐 때 (즉, 스트림릿 클라우드 서버일 때)
-        os.system('apt-get -qq env ./fonts/ > /dev/null 2>&1')
-        os.system('sudo apt-get install -y fonts-nanum* > /dev/null 2>&1')
-        import matplotlib.font_manager as fm
-        fm._rebuild()
-        return "NanumBarunGothic"
-    else:
-        return "Malgun Gothic"  # 내 컴퓨터(Windows)에서 실행할 때
+# ---------------- [안전하게 수정] 시스템 환경별 폰트 이름 지정 ----------------
+if os.name == 'nt':  # 내 컴퓨터 (Windows 환경)
+    font_name = "Malgun Gothic"
+else:                # 스트림릿 클라우드 서버 (Linux 환경)
+    font_name = "NanumGothic"  # packages.txt에 적은 나눔폰트가 자동으로 잡힙니다.
 
-font_name = install_fonts()
 plt.rcParams['font.family'] = font_name
 plt.rcParams['axes.unicode_minus'] = False
 sns.set_theme(style="whitegrid", font=font_name)
@@ -89,94 +81,4 @@ if raw_df is not None:
     )
     
     min_score = float(raw_df['안전지수'].min())
-    max_score = float(raw_df['안전지수'].max())
-    score_range = st.sidebar.slider(
-        "최소~최대 안전지수 설정",
-        min_value=min_score,
-        max_value=max_score,
-        value=(min_score, max_score),
-        step=0.1
-    )
-    
-    st.sidebar.write("---")
-    st.sidebar.info("💡 사이드바의 필터를 변경하면 우측의 모든 데이터와 그래프가 실시간으로 바뀝니다.")
-    
-    # 필터 데이터 반영
-    df = raw_df[
-        (raw_df['자치구'].isin(selected_districts)) & 
-        (raw_df['안전지수'] >= score_range[0]) & 
-        (raw_df['안전지수'] <= score_range[1])
-    ]
-    
-    # ---------------- 본문 UI 구성 ----------------
-    st.title("🛡️ 서울시 자치구별 안전지수 대시보드")
-    st.caption("경찰청 범죄 통계와 자치구별 CCTV 현황 데이터를 융합한 분석 대시보드입니다.")
-    st.write("---")
-    
-    if df.empty:
-        st.warning("⚠️ 필터 조건에 맞는 자치구가 없습니다. 사이드바 설정을 다시 변경해 주세요.")
-    else:
-        # KPI 카드
-        df_sorted = df.sort_values(by='안전지수', ascending=False)
-        kpi1, kpi2, kpi3 = st.columns(3)
-        kpi1.metric("분석 대상 자치구 수", f"{len(df)}개")
-        kpi2.metric("선택 자치구 평균 안전지수", f"{df['안전지수'].mean():.2f} 점")
-        kpi3.metric("필터 내 최고 안전 구", f"{df_sorted.iloc[0]['자치구']} ({df_sorted.iloc[0]['안전지수']}점)")
-        st.write("---")
-        
-        # 메인 콘텐츠 영역 (좌: 막대그래프 / 우: 테이블)
-        left, right = st.columns([6, 4])
-        with left:
-            st.subheader("📊 자치구별 안전지수 순위")
-            
-            fig, ax = plt.subplots(figsize=(10, max(4, len(df) * 0.3)))
-            bars = sns.barplot(x='안전지수', y='자치구', data=df_sorted, palette='coolwarm', ax=ax)
-            
-            ax.set_title('서울시 자치구별 안전지수 (점수가 높을수록 안전)', fontsize=13, weight='bold', pad=20)
-            ax.set_xlabel('안전지수 (100점 만점)', fontsize=11, labelpad=10)
-            ax.set_ylabel('자치구', fontsize=11, labelpad=10)
-            ax.tick_params(axis='y', labelsize=10)
-            
-            for bar in bars.patches:
-                width = bar.get_width()
-                if width > 0:
-                    ax.text(width + 1, bar.get_y() + bar.get_height()/2, f'{width:.1f}', 
-                            va='center', ha='left', fontsize=9, color='black', weight='bold')
-                
-            plt.subplots_adjust(left=0.22, right=0.90, top=0.90, bottom=0.12)
-            st.pyplot(fig)
-            
-        with right:
-            st.subheader("🏆 안전지수 상세 순위")
-            st.dataframe(df_sorted[['자치구', '안전지수', 'CCTV 점수', '범죄 점수']].reset_index(drop=True), use_container_width=True, height=455)
-        st.write("---")
-        
-        # 하단 섹션: 비교 시각화
-        st.subheader("🔄 원본 지표 비교 (CCTV 수 vs 범죄 건수)")
-        df_compare = df.sort_values(by='자치구')
-        x = range(len(df_compare))
-        
-        fig2, ax2 = plt.subplots(figsize=(12, 5.5))
-        
-        bar1 = ax2.bar([i - 0.2 for i in x], df_compare['CCTV수'], width=0.4, label='CCTV 설치수(대)', color='#5bc0de')
-        ax2.set_ylabel('CCTV 설치수 (대)', color='#5bc0de', weight='bold', labelpad=10)
-        ax2.tick_params(axis='y', labelcolor='#5bc0de')
-        
-        ax2_twin = ax2.twinx()
-        bar2 = ax2_twin.bar([i + 0.2 for i in x], df_compare['범죄건수'], width=0.4, label='범죄 발생건수(건)', color='#d9534f')
-        ax2_twin.set_ylabel('범죄 발생건수 (건)', color='#d9534f', weight='bold', labelpad=10)
-        ax2_twin.tick_params(axis='y', labelcolor='#d9534f')
-        
-        ax2.set_xticks(x)
-        ax2.set_xticklabels(df_compare['자치구'], rotation=45, ha='right', fontsize=10)
-        ax2.set_title('자치구별 CCTV 보유량과 범죄 건수 동시 비교', fontsize=13, weight='bold', pad=15)
-        
-        lines1, labels1 = ax2.get_legend_handles_labels()
-        lines2, labels2 = ax2_twin.get_legend_handles_labels()
-        ax2.legend(lines1 + lines2, labels1 + labels2, loc='upper left', bbox_to_anchor=(1.08, 1))
-        
-        plt.tight_layout()
-        st.pyplot(fig2)
-        
-        with st.expander("🔍 선택한 자치구 전체 원본 데이터 테이블 보기"):
-            st.dataframe(df_sorted.reset_index(drop=True), use_container_width=True)
+    max_score = float(raw_df
