@@ -21,7 +21,7 @@ def load_and_process_data():
         crime_sum.columns = ['자치구', '범죄건수']
         crime_sum['자치구'] = crime_sum['자치구'].str.replace("서울 ", "").str.strip()
         
-        # 2. CCTV 데이터 로드 및 에러 방지 전처리
+        # 2. CCTV 데이터 로드 및 전처리
         cctv_df = pd.read_excel("서울시 자치구 (연도별) CCTV 설치현황_241231.xlsx", header=2)
         cctv_df.columns = cctv_df.columns.str.strip()
         
@@ -35,17 +35,23 @@ def load_and_process_data():
         
         # 3. 데이터 병합 및 숫자 형변환
         merged_df = pd.merge(crime_sum, cctv_filtered, on='자치구', how='inner')
-        if merged_df.empty: return None
+        if merged_df.empty: 
+            return None
         
         merged_df['범죄건수'] = pd.to_numeric(merged_df['범죄건수'])
         merged_df['CCTV수'] = pd.to_numeric(merged_df['CCTV수'])
         
-        # 4. 안전지수 공식 계산
-        max_cctv = merged_df['CCTV수'].max()
-        max_crime = merged_df['범죄건수'].max()
+        # 4. 안전지수 공식 계산 (직관적인 상대평가 방식)
+        max_cctv = merged_df['CCTV수'].max()         
+        min_crime = merged_df['범죄건수'].min()        
         
+        # CCTV 점수 계산 (CCTV 1등 구는 50점 만점)
         merged_df['CCTV 점수'] = (merged_df['CCTV수'] / max_cctv) * 50
-        merged_df['범죄 점수'] = (1 - (merged_df['범죄건수'] / max_crime)) * 50
+        
+        # 범죄 점수 계산 (범죄 최소 1등 구는 50점 만점)
+        merged_df['범죄 점수'] = (min_crime / merged_df['범죄건수']) * 50
+        
+        # 최종 안전지수 합산 (100점 만점)
         merged_df['안전지수'] = merged_df['CCTV 점수'] + merged_df['범죄 점수']
         
         return merged_df.round(2)
@@ -56,11 +62,10 @@ def load_and_process_data():
 raw_df = load_and_process_data()
 
 if raw_df is not None:
-    # ---------------- [추가] 사이드바 필터 설정 영역 ----------------
+    # ---------------- 사이드바 필터 설정 영역 ----------------
     st.sidebar.header("🔍 데이터 검색 및 필터")
     st.sidebar.markdown("원하는 조건으로 자치구를 필터링해보세요.")
     
-    # 1. 자치구 다중 선택 필터 (기본값은 전체 선택)
     all_districts = sorted(raw_df['자치구'].unique())
     selected_districts = st.sidebar.multiselect(
         "확인할 자치구 선택",
@@ -68,7 +73,6 @@ if raw_df is not None:
         default=all_districts
     )
     
-    # 2. 안전지수 점수 범위 필터 (슬라이더)
     min_score = float(raw_df['안전지수'].min())
     max_score = float(raw_df['안전지수'].max())
     score_range = st.sidebar.slider(
@@ -82,7 +86,7 @@ if raw_df is not None:
     st.sidebar.write("---")
     st.sidebar.info("💡 사이드바의 필터를 변경하면 우측의 모든 데이터와 그래프가 실시간으로 바뀝니다.")
     
-    # [필터 데이터 반영] 사용자가 선택한 조건으로 데이터 필터링
+    # 필터 데이터 반영
     df = raw_df[
         (raw_df['자치구'].isin(selected_districts)) & 
         (raw_df['안전지수'] >= score_range[0]) & 
@@ -94,11 +98,10 @@ if raw_df is not None:
     st.caption("경찰청 범죄 통계와 자치구별 CCTV 현황 데이터를 융합한 분석 대시보드입니다.")
     st.write("---")
     
-    # 데이터가 비어있을 때 예외 처리
     if df.empty:
         st.warning("⚠️ 필터 조건에 맞는 자치구가 없습니다. 사이드바 설정을 다시 변경해 주세요.")
     else:
-        # KPI 카드 (필터링된 데이터 기준 계산)
+        # KPI 카드
         df_sorted = df.sort_values(by='안전지수', ascending=False)
         kpi1, kpi2, kpi3 = st.columns(3)
         kpi1.metric("분석 대상 자치구 수", f"{len(df)}개")
@@ -111,7 +114,7 @@ if raw_df is not None:
         with left:
             st.subheader("📊 자치구별 안전지수 순위")
             
-            fig, ax = plt.subplots(figsize=(10, max(4, len(df) * 0.3))) # 자치구 수에 따라 그래프 높이 자동 조절
+            fig, ax = plt.subplots(figsize=(10, max(4, len(df) * 0.3)))
             bars = sns.barplot(x='안전지수', y='자치구', data=df_sorted, palette='coolwarm', ax=ax)
             
             ax.set_title('서울시 자치구별 안전지수 (점수가 높을수록 안전)', fontsize=13, weight='bold', pad=20)
@@ -119,10 +122,9 @@ if raw_df is not None:
             ax.set_ylabel('자치구', fontsize=11, labelpad=10)
             ax.tick_params(axis='y', labelsize=10)
             
-            # 막대 우측에 수치 표시
             for bar in bars.patches:
                 width = bar.get_width()
-                if width > 0: # 값이 존재할 때만 표시
+                if width > 0:
                     ax.text(width + 1, bar.get_y() + bar.get_height()/2, f'{width:.1f}', 
                             va='center', ha='left', fontsize=9, color='black', weight='bold')
                 
