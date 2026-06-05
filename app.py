@@ -2,11 +2,26 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import os
 
-# 한글 폰트 및 마이너스 깨짐 설정 (Windows 환경 최적화)
-plt.rcParams['font.family'] = 'Malgun Gothic'
+# ---------------- [수정] 스트림릿 서버용 한글 폰트 강제 설정 ----------------
+@st.cache_resource
+def install_fonts():
+    # 리눅스 서버 환경일 때만 나눔 폰트를 다운로드하여 설치합니다.
+    if os.name != 'nt':  # Windows가 아닐 때 (즉, 스트림릿 클라우드 서버일 때)
+        os.system('apt-get -qq env ./fonts/ > /dev/null 2>&1')
+        os.system('sudo apt-get install -y fonts-nanum* > /dev/null 2>&1')
+        import matplotlib.font_manager as fm
+        fm._rebuild()
+        return "NanumBarunGothic"
+    else:
+        return "Malgun Gothic"  # 내 컴퓨터(Windows)에서 실행할 때
+
+font_name = install_fonts()
+plt.rcParams['font.family'] = font_name
 plt.rcParams['axes.unicode_minus'] = False
-sns.set_theme(style="whitegrid", font='Malgun Gothic')
+sns.set_theme(style="whitegrid", font=font_name)
+# -------------------------------------------------------------------------
 
 # 대시보드 페이지 설정 (와이드 모드)
 st.set_page_config(page_title="서울시 자치구 안전지수 대시보드", layout="wide")
