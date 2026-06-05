@@ -3,17 +3,25 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+import matplotlib.font_manager as fm
 
-# ---------------- [안전 설정] 시스템 환경별 폰트 이름 지정 ----------------
+# ---------------- [강제 주소 지정] 시스템 환경별 폰트 설정 ----------------
 if os.name == 'nt':  # 내 컴퓨터 (Windows 환경)
     font_name = "Malgun Gothic"
+    plt.rcParams['font.family'] = font_name
 else:                # 스트림릿 클라우드 서버 (Linux 환경)
-    font_name = "NanumGothic"  # packages.txt에 적은 나눔폰트가 자동으로 잡힙니다.
+    # 리눅스 시스템에 설치된 나눔고딕 폰트 파일의 경로를 직접 지정하여 캐시 문제를 우회합니다.
+    font_path = '/usr/share/fonts/truetype/nanum/NanumGothic.ttf'
+    if os.path.exists(font_path):
+        font_prop = fm.FontProperties(fname=font_path)
+        font_name = font_prop.get_name()
+        plt.rcParams['font.family'] = font_name
+    else:
+        font_name = "sans-serif"
+# -------------------------------------------------------------------------
 
-plt.rcParams['font.family'] = font_name
 plt.rcParams['axes.unicode_minus'] = False
 sns.set_theme(style="whitegrid", font=font_name)
-# -------------------------------------------------------------------------
 
 # 대시보드 페이지 설정 (와이드 모드)
 st.set_page_config(page_title="서울시 자치구 안전지수 대시보드", layout="wide")
